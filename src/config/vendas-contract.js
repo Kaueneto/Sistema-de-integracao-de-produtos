@@ -1,0 +1,21 @@
+export const VENDAS_CONTRACT = Object.freeze({
+  fileName: 'vendas.csv',
+  delimiter: ';',
+  encoding: 'utf-8',
+  lineEnding: '\n',
+  headers: [
+    'id_venda',
+    'id_cliente',
+    'id_produto',
+    'quantidade',
+    'valor_unitario',
+    'valor_total',
+    'data_venda',
+    'forma_pagamento',
+    'status',
+    'integrante',
+    'email',
+  ],
+  paymentMethods: new Set(['PIX', 'CARTAO', 'BOLETO']),
+  statuses: new Set(['CONCLUIDA', 'CANCELADA']),
+});

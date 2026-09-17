@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Produtos | Grupo 3</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .field {
+        display: grid;
+        gap: 0.45rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #cbd5e1;
+      }
+      .field input,
+      .field textarea {
+        width: 100%;
+        border-radius: 0.5rem;
+        border: 1px solid #334155;
+        background: #020617;
+        padding: 0.55rem 0.7rem;
+        color: #f8fafc;
+        font-weight: 400;
+        outline: none;
+      }
+      .field input:focus,
+      .field textarea:focus {
+        border-color: #22d3ee;
+        box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.15);
+      }
+      .tab-switcher {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        padding: 0.25rem;
+        border: 1px solid #1e293b;
+        border-radius: 0.75rem;
+        background: #0f172a;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+      }
+      .tab {
+        border-radius: 0.5rem;
+        padding: 0.55rem 0.85rem;
+        color: #94a3b8;
+        font-size: 0.875rem;
+        font-weight: 600;
+        transition:
+          background-color 0.2s ease,
+          color 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .tab:hover {
+        background: #1e293b;
+        color: #e2e8f0;
+      }
+      .tab:focus-visible {
+        outline: 3px solid #22d3ee;
+        outline-offset: 2px;
+      }
+      .tab--active {
+        background: #164e63;
+        color: #cffafe;
+        box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.18);
+      }
+      .tab--active:hover {
+        background: #164e63;
+        color: #cffafe;
+      }
+      .panel-enter {
+        animation: panel-enter 0.22s ease-out both;
+      }
+      @keyframes panel-enter {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (min-width: 640px) {
+        .tab {
+          padding: 0.6rem 1rem;
+        }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100">
+    <main class="mx-auto max-w-6xl px-6 py-10">
+      <header
+        class="mb-10 flex flex-col gap-4 border-b border-slate-800 pb-8 md:flex-row md:items-end md:justify-between"
+      >
+        <div>
+          <p
+            class="mb-2 text-sm font-semibold uppercase tracking-[.24em] text-cyan-400"
+          >
+            Integração CSV · Grupo 3
+          </p>
+          <h1 class="text-3xl font-bold tracking-tight">Sistema de Produtos</h1>
+          <p class="mt-2 text-slate-400">
+            Cadastro, exportação e validação de remessas do Sistema de Vendas.
+          </p>
+        </div>
+      </header>
+
+      <nav class="tab-switcher mb-7" aria-label="Navegação principal">
+        <button data-tab="import" class="tab tab--active" aria-current="page">
+          Importação
+        </button>
+        <button data-tab="sales" class="tab">Vendas</button>
+        <button data-tab="products" class="tab">Produtos</button>
+      </nav>
+
+      <section id="import" class="panel grid gap-6">
+        <div class="rounded-xl border border-slate-800 bg-slate-900 p-6">
+          <h2 class="text-xl font-semibold">Importar arquivo do Grupo 2</h2>
+          <p class="mt-1 text-sm text-slate-400">
+            Obrigatório: UTF-8, LF, cabeçalho e delimitador <code>;</code>.
+          </p>
+          <form
+            id="import-form"
+            class="mt-5 flex flex-col gap-4 md:flex-row md:items-end"
+          >
+            <label class="block flex-1 text-sm font-medium"
+              >Arquivo CSV<input
+                id="csv-file"
+                name="file"
+                type="file"
+                accept=".csv,text/csv"
+                required
+                class="mt-2 block w-full rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm" /></label
+            ><button
+              id="preview-button"
+              class="rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 hover:bg-cyan-400"
+            >
+              Validar arquivo
+            </button>
+          </form>
+          <p
+            id="import-feedback"
+            class="mt-4 hidden rounded-lg px-4 py-3 text-sm"
+          ></p>
+        </div>
+        <div>
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-xl font-semibold">Histórico de remessas</h2>
+            <button
+              id="refresh-imports"
+              class="text-sm text-cyan-400 hover:text-cyan-300"
+            >
+              Atualizar
+            </button>
+          </div>
+          <div id="imports-list" class="grid gap-3"></div>
+        </div>
+      </section>
+
+      <section
+        id="products"
+        class="panel hidden grid gap-6 lg:grid-cols-[.8fr_1.2fr]"
+      >
+        <form
+          id="product-form"
+          class="rounded-xl border border-slate-800 bg-slate-900 p-6"
+        >
+          <h2 class="text-xl font-semibold">Cadastrar produto</h2>
+          <div class="mt-5 grid gap-4">
+            <label class="field"
+              >ID do produto<input
+                name="id_produto"
+                type="number"
+                min="1"
+                step="1"
+                required /></label
+            ><label class="field"
+              >Nome<input name="nome" required maxlength="120" /></label
+            ><label class="field"
+              >Descrição<textarea
+                name="descricao"
+                rows="3"
+                maxlength="500"
+              ></textarea></label
+            ><label class="field"
+              >Categoria<input
+                name="categoria"
+                required
+                maxlength="100" /></label
+            ><label class="field"
+              >Preço<input
+                name="preco"
+                type="number"
+                min="0.01"
+                step="0.01"
+                required /></label
+            ><label class="field"
+              >Unidade de medida<input
+                name="unidade_medida"
+                required
+                maxlength="20"
+                placeholder="UN, KG, L..." /></label
+            ><label class="flex items-center gap-2 text-sm"
+              ><input name="ativo" type="checkbox" checked /> Produto
+              ativo</label
+            ><button
+              class="rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950"
+            >
+              Cadastrar produto
+            </button>
+          </div>
+          <p
+            id="product-feedback"
+            class="mt-4 hidden rounded-lg px-4 py-3 text-sm"
+          ></p>
+        </form>
+        <div>
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-xl font-semibold">Produtos cadastrados</h2>
+            <a
+              href="/api/produtos/export/csv"
+              class="rounded-lg border border-cyan-500/50 px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/10"
+              >Exportar CSV</a
+            >
+          </div>
+          <div
+            id="products-list"
+            class="overflow-x-auto rounded-xl border border-slate-800"
+          ></div>
+        </div>
+      </section>
+
+      <section id="sales" class="panel hidden">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-xl font-semibold">Vendas processadas</h2>
+            <p class="mt-1 text-sm text-slate-400">
+              Consulte, filtre e ordene cada venda aceita na integração.
+            </p>
+          </div>
+          <button
+            id="refresh-sales"
+            class="rounded-lg border border-cyan-500/50 px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/10"
+          >
+            Atualizar vendas
+          </button>
+        </div>
+        <div
+          class="mb-4 grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 md:grid-cols-4"
+        >
+          <label class="field"
+            >Buscar<input
+              id="sales-search"
+              placeholder="Venda, cliente, produto..." /></label
+          ><label class="field"
+            >Status<select id="sales-status">
+              <option value="">Todos</option>
+              <option>CONCLUIDA</option>
+              <option>CANCELADA</option>
+            </select></label
+          ><label class="field"
+            >Data inicial<input id="sales-date-from" type="date" /></label
+          ><label class="field"
+            >Data final<input id="sales-date-to" type="date"
+          /></label>
+        </div>
+        <p id="sales-count" class="mb-3 text-sm text-slate-400"></p>
+        <div
+          id="sales-list"
+          class="max-h-[58vh] overflow-auto rounded-xl border border-slate-800"
+        ></div>
+      </section>
+    </main>
+    <dialog
+      id="errors-modal"
+      class="w-[min(100%-2rem,72rem)] rounded-2xl border border-slate-700 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/80"
+    >
+      <section class="max-h-[80vh] overflow-auto p-6">
+        <div class="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <p
+              class="text-sm font-semibold uppercase tracking-wider text-rose-400"
+            >
+              Registros rejeitados
+            </p>
+            <h2 id="errors-title" class="mt-1 text-xl font-bold">
+              Erros da importação
+            </h2>
+          </div>
+          <button
+            id="close-errors-modal"
+            class="rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-800"
+            aria-label="Fechar"
+          >
+            ✕
+          </button>
+        </div>
+        <div id="errors-content"></div>
+      </section>
+    </dialog>
+    <dialog
+      id="preview-modal"
+      class="w-[min(100%-2rem,72rem)] rounded-2xl border border-slate-700 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/80"
+    >
+      <section class="max-h-[80vh] overflow-auto p-6">
+        <div class="mb-5">
+          <p
+            class="text-sm font-semibold uppercase tracking-wider text-cyan-400"
+          >
+            Prévia da importação
+          </p>
+          <h2 id="preview-title" class="mt-1 text-xl font-bold">
+            Validação concluída
+          </h2>
+          <p id="preview-summary" class="mt-2 text-sm text-slate-400"></p>
+        </div>
+        <div id="preview-errors"></div>
+        <div class="mt-6 flex flex-wrap justify-end gap-3">
+          <button
+            id="cancel-preview"
+            class="rounded-lg border border-slate-700 px-4 py-2 font-semibold text-slate-300 hover:bg-slate-800"
+          >
+            Cancelar</button
+          ><button
+            id="confirm-preview"
+            class="rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-400"
+          >
+            Salvar registros válidos
+          </button>
+        </div>
+      </section>
+    </dialog>
+    <dialog
+      id="report-modal"
+      class="w-[min(100%-2rem,64rem)] rounded-2xl border border-slate-700 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/80"
+    >
+      <section class="max-h-[80vh] overflow-auto p-6">
+        <div class="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <p
+              class="text-sm font-semibold uppercase tracking-wider text-cyan-400"
+            >
+              Relatório de processamento
+            </p>
+            <h2 id="report-title" class="mt-1 text-xl font-bold">
+              Processamento do CSV
+            </h2>
+          </div>
+          <button
+            id="close-report-modal"
+            class="rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-800"
+          >
+            ✕
+          </button>
+        </div>
+        <div id="report-content"></div>
+      </section>
+    </dialog>
+    <dialog
+      id="sale-modal"
+      class="w-[min(100%-2rem,40rem)] rounded-2xl border border-slate-700 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/80"
+    >
+      <section class="p-6">
+        <div class="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <p
+              class="text-sm font-semibold uppercase tracking-wider text-cyan-400"
+            >
+              Venda importada
+            </p>
+            <h2 id="sale-title" class="mt-1 text-xl font-bold">
+              Detalhes da venda
+            </h2>
+          </div>
+          <button
+            id="close-sale-modal"
+            class="rounded-lg px-3 py-2 text-slate-300 hover:bg-slate-800"
+          >
+            ✕
+          </button>
+        </div>
+        <dl id="sale-content" class="grid grid-cols-2 gap-4"></dl>
+      </section>
+    </dialog>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
