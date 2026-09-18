@@ -3,12 +3,28 @@ import { db } from "../db/database.js";
 
 export const productsRouter = Router();
 
-const findProductById = db.prepare(
-  "SELECT 1 FROM produtos WHERE id_produto = ?",
-);
 const findProductByDescription = db.prepare(
   "SELECT 1 FROM produtos WHERE lower(descricao) = lower(?)",
 );
+const findNextProductId = db.prepare(
+  "SELECT COALESCE(MAX(id_produto), 0) + 1 AS nextId FROM produtos",
+);
+
+function parsePrice(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return { error: "Informe o preço do produto." };
+
+  if (!/^\d+(?:[,.]\d{1,2})?$/.test(text)) {
+    return {
+      error:
+        "Preço inválido. Use apenas números, com até duas casas decimais, por exemplo: 19,90.",
+    };
+  }
+
+  const price = Number(text.replace(",", "."));
+  if (price <= 0) return { error: "O preço deve ser maior que zero." };
+  return { value: price };
+}
 function escape(value) {
   const text = String(value ?? "");
   return /[";\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
@@ -24,10 +40,13 @@ productsRouter.get("/", (_request, response) => {
   );
 });
 
+productsRouter.get("/proximo-id", (_request, response) => {
+  response.json(findNextProductId.get());
+});
+
 productsRouter.post("/", (request, response, next) => {
   try {
     const {
-      id_produto,
       nome,
       descricao = "",
       categoria,
@@ -35,22 +54,18 @@ productsRouter.post("/", (request, response, next) => {
       unidade_medida,
       ativo = true,
     } = request.body;
-    const id = Number(id_produto);
-    if (!Number.isInteger(id) || id <= 0)
-      return response
-        .status(400)
-        .json({ message: "id_produto deve ser um inteiro maior que zero." });
-    if (!nome?.trim() || !categoria?.trim() || !unidade_medida?.trim())
+    const requiredFields = [
+      ["nome", nome],
+      ["categoria", categoria],
+      ["unidade de medida", unidade_medida],
+    ]
+      .filter(([, value]) => !String(value ?? "").trim())
+      .map(([label]) => label);
+    if (requiredFields.length)
       return response
         .status(400)
         .json({
-          message: "Nome, categoria e unidade de medida são obrigatórios.",
-        });
-    if (findProductById.get(id))
-      return response
-        .status(409)
-        .json({
-          message: `Já existe um produto cadastrado com o ID ${id}. Informe outro ID.`,
+          message: `Preencha os campos obrigatórios: ${requiredFields.join(", ")}.`,
         });
     if (descricao.trim() && findProductByDescription.get(descricao.trim()))
       return response
@@ -59,11 +74,17 @@ productsRouter.post("/", (request, response, next) => {
           message:
             "Já existe um produto cadastrado com esta descrição. Informe uma descrição diferente.",
         });
-    const price = Number(preco);
-    if (!Number.isFinite(price) || price <= 0)
+    const parsedPrice = parsePrice(preco);
+    if (parsedPrice.error)
       return response
         .status(400)
-        .json({ message: "Preço unitário deve ser maior que zero." });
+        .json({ message: parsedPrice.error });
+    const id = findNextProductId.get().nextId;
+    if (!Number.isSafeInteger(id) || id <= 0)
+      return response.status(500).json({
+        message:
+          "Não foi possível gerar um ID válido para o produto. Tente novamente.",
+      });
     const result = db
       .prepare(
         "INSERT INTO produtos (id_produto, nome, descricao, categoria, preco, unidade_medida, ativo) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -73,7 +94,7 @@ productsRouter.post("/", (request, response, next) => {
         nome.trim(),
         descricao.trim(),
         categoria.trim(),
-        price,
+        parsedPrice.value,
         unidade_medida.trim(),
         ativo ? 1 : 0,
       );
@@ -92,7 +113,7 @@ productsRouter.post("/", (request, response, next) => {
         .status(409)
         .json({
           message:
-            "Já existe um produto cadastrado com este ID. Informe outro ID.",
+            "Não foi possível gerar o ID do produto. Atualize a página e tente novamente.",
         });
     return next(error);
   }

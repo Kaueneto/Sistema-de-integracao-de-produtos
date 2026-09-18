@@ -168,21 +168,28 @@
           <h2 class="text-xl font-semibold">Cadastrar produto</h2>
           <div class="mt-5 grid gap-4">
             <label class="field"
-              >ID do produto<input
+              >ID do produto
+              <input
                 name="id_produto"
-                type="number"
-                min="1"
-                step="1"
-                required /></label
-            ><label class="field"
-              >Nome<input name="nome" required maxlength="120" /></label
-            ><label class="field"
-              >Descrição<textarea
+                type="text"
+                readonly
+                aria-describedby="product-id-help" />
+                </label>
+              <p id="product-id-help" class="-mt-2 text-xs text-slate-400">
+              Gerado automaticamente a partir dos produtos já cadastrados.
+            </p>
+            <label class="field">Nome
+              <input name="nome" required maxlength="120" />
+              </label>
+            <label class="field">
+              Descrição<textarea
                 name="descricao"
                 rows="3"
                 maxlength="500"
-              ></textarea></label
-            ><label class="field"
+              >
+            </textarea>
+          </label>
+          <label class="field"
               >Categoria<input
                 name="categoria"
                 required
@@ -190,11 +197,13 @@
             ><label class="field"
               >Preço<input
                 name="preco"
-                type="number"
-                min="0.01"
-                step="0.01"
+                type="text"
+                inputmode="decimal"
                 required /></label
-            ><label class="field"
+            ><p class="-mt-2 text-xs text-slate-400">
+              Informe um valor maior que zero. Use vírgula ou ponto para os centavos, por exemplo: 19,90.
+            </p>
+            <label class="field"
               >Unidade de medida<input
                 name="unidade_medida"
                 required

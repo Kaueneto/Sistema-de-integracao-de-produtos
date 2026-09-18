@@ -10,6 +10,10 @@ const escapeHtml = (value) =>
 let pendingPreviewToken = null;
 let sales = [];
 let salesSort = { key: "id_venda", direction: "desc" };
+const currencyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
 
 function showFeedback(element, message, type = "success") {
   element.textContent = message;
@@ -73,7 +77,7 @@ async function loadProducts() {
     {
       key: "preco",
       label: "Preço",
-      render: (row) => `R$ ${Number(row.preco).toFixed(2)}`,
+      render: (row) => currencyFormatter.format(Number(row.preco)),
     },
     { key: "unidade_medida", label: "Unidade" },
     {
@@ -82,6 +86,11 @@ async function loadProducts() {
       render: (row) => (row.ativo ? "Sim" : "Não"),
     },
   ]);
+}
+
+async function loadNextProductId() {
+  const { nextId } = await api("/api/produtos/proximo-id");
+  $("#product-form [name='id_produto']").value = nextId;
 }
 
 function dateToComparable(value) {
@@ -207,7 +216,8 @@ document.querySelectorAll(".tab").forEach((button) =>
     requestAnimationFrame(() => panel.classList.add("panel-enter"));
     button.classList.add("tab--active");
     button.setAttribute("aria-current", "page");
-    if (button.dataset.tab === "products") await loadProducts();
+    if (button.dataset.tab === "products")
+      await Promise.all([loadProducts(), loadNextProductId()]);
     if (button.dataset.tab === "sales") await loadSales();
   }),
 );
@@ -267,7 +277,8 @@ $("#import-form").addEventListener("submit", async (event) => {
 $("#product-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const feedback = $("#product-feedback");
-  const form = new FormData(event.currentTarget);
+  const productForm = event.currentTarget;
+  const form = new FormData(productForm);
   try {
     await api("/api/produtos", {
       method: "POST",
@@ -278,8 +289,8 @@ $("#product-form").addEventListener("submit", async (event) => {
       }),
     });
     showFeedback(feedback, "Produto cadastrado com sucesso.");
-    event.currentTarget.reset();
-    await loadProducts();
+    productForm.reset();
+    await Promise.all([loadProducts(), loadNextProductId()]);
   } catch (error) {
     showFeedback(feedback, error.message, "error");
   }
