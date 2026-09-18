@@ -44,6 +44,26 @@ function structuralFailure(message) {
   });
 }
 
+function validateHeaderOrder(header) {
+  const expected = VENDAS_CONTRACT.headers;
+  if (header.length !== expected.length) {
+    return {
+      valid: false,
+      message: `Cabeçalho inválido: esperado ${expected.length} colunas, recebido ${header.length}. Ordem exigida: ${expected.join(";")}.`,
+    };
+  }
+
+  const mismatchIndex = header.findIndex(
+    (value, index) => value !== expected[index],
+  );
+  if (mismatchIndex === -1) return { valid: true };
+
+  return {
+    valid: false,
+    message: `Ordem das colunas inválida na posição ${mismatchIndex + 1}: esperado "${expected[mismatchIndex]}", recebido "${header[mismatchIndex] || "vazio"}". Ordem exigida: ${expected.join(";")}.`,
+  };
+}
+
 function csvEscape(value) {
   const text = String(value ?? "");
   return /[";\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
@@ -113,14 +133,8 @@ export function previewVendasCsv(file) {
     );
 
   const header = parsed[0].record;
-  if (
-    header.length !== VENDAS_CONTRACT.headers.length ||
-    header.some((value, index) => value !== VENDAS_CONTRACT.headers[index])
-  ) {
-    return structuralFailure(
-      `Cabeçalho inválido. Esperado: ${VENDAS_CONTRACT.headers.join(";")}`,
-    );
-  }
+  const headerValidation = validateHeaderOrder(header);
+  if (!headerValidation.valid) return structuralFailure(headerValidation.message);
   const errors = [];
   const validRecords = [];
   const context = { saleIds: new Set() };
@@ -144,6 +158,7 @@ export function previewVendasCsv(file) {
     status: "PRONTA_PARA_SALVAR",
     fileName: file.originalname,
     hash,
+    headerValidated: true,
     total: parsed.length - 1,
     processed: validRecords.length,
     rejected: errors.length,

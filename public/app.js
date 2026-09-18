@@ -233,7 +233,14 @@ $("#import-form").addEventListener("submit", async (event) => {
       method: "POST",
       body: new FormData(event.currentTarget),
     });
+    const isStructuralError = result.status === "REJEITADA_ESTRUTURA";
     pendingPreviewToken = result.token;
+    $("#preview-status").textContent = isStructuralError
+      ? "Importação bloqueada"
+      : "Prévia da importação";
+    $("#preview-status").className = `text-sm font-semibold uppercase tracking-wider ${isStructuralError ? "text-rose-400" : "text-cyan-400"}`;
+    $("#preview-title").className = `mt-1 text-xl font-bold ${isStructuralError ? "text-rose-300" : "text-slate-100"}`;
+    $("#preview-summary").className = `mt-2 text-sm ${isStructuralError ? "rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3 font-medium text-rose-200" : "text-slate-400"}`;
     $("#preview-title").textContent =
       result.status === "REJEITADA_ESTRUTURA"
         ? "Arquivo não pode ser importado"
@@ -245,8 +252,10 @@ $("#import-form").addEventListener("submit", async (event) => {
         ? result.structuralError
         : result.status === "REPROCESSAMENTO"
           ? `O conteúdo deste arquivo já foi processado na remessa #${result.previousImport.id}, em ${new Date(result.previousImport.receivedAt + "Z").toLocaleString("pt-BR")}. Nenhum dado será salvo automaticamente.`
-          : `${result.total} registros lidos: ${result.processed} prontos para salvar e ${result.rejected} rejeitados.`;
-    $("#preview-errors").innerHTML = result.errors.length
+          : `Cabeçalho e ordem das 11 colunas conferidos. ${result.total} registros lidos: ${result.processed} prontos para salvar e ${result.rejected} rejeitados.`;
+    $("#preview-errors").innerHTML = isStructuralError
+      ? '<div class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">O arquivo não foi importado e nenhum registro será salvo. Corrija o cabeçalho ou a estrutura do CSV antes de enviar novamente.</div>'
+      : result.errors.length
       ? `<h3 class="mb-3 font-semibold text-rose-300">Inconsistências encontradas</h3>${table(
           result.errors,
           [
