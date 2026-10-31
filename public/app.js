@@ -9,6 +9,10 @@ const escapeHtml = (value) =>
   );
 let pendingPreviewToken = null;
 let sales = [];
+let products = [];
+let editingProductId = null;
+let catalogRows = [];
+let editingCatalogKey = null;
 let salesSort = { key: "id_venda", direction: "desc" };
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -30,7 +34,7 @@ async function api(path, options) {
   const response = await fetch(path, options);
   const body = await response.json().catch(() => ({}));
   if (!response.ok)
-    throw new Error(body.message || "Não foi possível concluir a operação.");
+    throw new Error(body.message || body.erro_estrutural || "Não foi possível concluir a operação.");
   return body;
 }
 
@@ -44,7 +48,7 @@ async function loadImports() {
   const rows = imports
     .map(
       (item) =>
-        `<tr class="border-t border-slate-800 bg-slate-950/40"><td class="whitespace-nowrap px-4 py-4 font-semibold text-slate-100">#${item.id}</td><td class="max-w-52 truncate px-4 py-4 text-slate-300" title="${escapeHtml(item.nome_arquivo ?? "Arquivo não informado")}">${escapeHtml(item.nome_arquivo ?? "Arquivo não informado")}</td><td class="whitespace-nowrap px-4 py-4 text-slate-300">${new Date(item.recebido_em + "Z").toLocaleString("pt-BR")}</td><td class="px-4 py-4 text-slate-300">${item.total_registros}</td><td class="px-4 py-4 text-emerald-300">${item.processados}</td><td class="px-4 py-4 text-rose-300">${item.rejeitados}</td><td class="min-w-[22rem] px-4 py-4"><div class="flex flex-wrap items-center gap-2"><button data-report-import="${item.id}" class="rounded-md border border-cyan-500/40 px-2.5 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10">Ver relatório de processamento</button><a class="rounded-md border border-cyan-500/40 px-2.5 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10" href="/api/importacoes/${item.id}/report.txt">Baixar relatório de processamento</a>${item.rejeitados ? `<button data-errors-import="${item.id}" class="rounded-md border border-rose-500/40 px-2.5 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/10">Ver erros do processamento</button><a class="rounded-md border border-rose-500/40 px-2.5 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/10" href="/api/importacoes/${item.id}/rejections">Baixar rejeitados do processamento</a>` : ""}</div></td></tr>`,
+        `<tr class="border-t border-slate-800 bg-slate-950/40"><td class="whitespace-nowrap px-4 py-4 font-semibold text-slate-100">#${item.id}</td><td class="max-w-52 truncate px-4 py-4 text-slate-300" title="${escapeHtml(item.nome_arquivo ?? "Arquivo não informado")}">${escapeHtml(item.nome_arquivo ?? "Arquivo não informado")}</td><td class="whitespace-nowrap px-4 py-4 text-slate-300">${new Date(item.recebido_em).toLocaleString("pt-BR")}</td><td class="px-4 py-4 text-slate-300">${item.total_registros}</td><td class="px-4 py-4 text-emerald-300">${item.processados}</td><td class="px-4 py-4 text-rose-300">${item.rejeitados}</td><td class="min-w-[22rem] px-4 py-4"><div class="flex flex-wrap items-center gap-2"><button data-report-import="${item.id}" class="rounded-md border border-cyan-500/40 px-2.5 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10">Ver relatório de processamento</button><a class="rounded-md border border-cyan-500/40 px-2.5 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10" href="/api/importacoes/${item.id}/report.txt">Baixar relatório de processamento</a>${item.rejeitados ? `<button data-errors-import="${item.id}" class="rounded-md border border-rose-500/40 px-2.5 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/10">Ver erros do processamento</button><a class="rounded-md border border-rose-500/40 px-2.5 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/10" href="/api/importacoes/${item.id}/rejections">Baixar rejeitados do processamento</a>` : ""}</div></td></tr>`,
     )
     .join("");
   $("#imports-list").innerHTML =
@@ -68,12 +72,14 @@ async function openErrorsModal(importId) {
 }
 
 async function loadProducts() {
-  const products = await api("/api/produtos");
+  products = await api("/api/produtos");
   $("#products-list").innerHTML = table(products, [
     { key: "id_produto", label: "ID" },
     { key: "nome", label: "Nome" },
     { key: "descricao", label: "Descrição" },
     { key: "categoria", label: "Categoria" },
+    { key: "marca", label: "Marca" },
+    { key: "fornecedor", label: "Fornecedor" },
     {
       key: "preco",
       label: "Preço",
@@ -85,12 +91,115 @@ async function loadProducts() {
       label: "Ativo",
       render: (row) => (row.ativo ? "Sim" : "Não"),
     },
+    {
+      label: "Ações",
+      render: (row) => `<div class="flex gap-3"><button data-edit-product="${row.id_produto}" class="text-cyan-300">Editar</button><button data-deactivate-product="${row.id_produto}" class="text-rose-300">Desativar</button></div>`,
+    },
   ]);
 }
 
-async function loadNextProductId() {
-  const { nextId } = await api("/api/produtos/proximo-id");
-  $("#product-form [name='id_produto']").value = nextId;
+function resetProductForm() {
+  editingProductId = null;
+  $("#product-form").reset();
+  $("#product-submit-label").textContent = "Cadastrar produto";
+  $("#product-form-title").textContent = "Cadastrar produto";
+  $("#product-modal-feedback").textContent = "";
+  $("#product-modal-feedback").classList.add("hidden");
+}
+
+async function openProductModal(product = null) {
+  try {
+    const kinds = ["categorias", "marcas", "fornecedores", "unidades"];
+    const catalogs = await Promise.all(kinds.map((kind) => api(`/api/catalogos/${kind}`)));
+    const fields = [
+      { name: "categoria", key: "nome", prompt: "Selecione a categoria" },
+      { name: "marca", key: "nome", prompt: "Sem marca" },
+      { name: "fornecedor", key: "nome", prompt: "Sem fornecedor" },
+      { name: "unidade_medida", key: "sigla", prompt: "Selecione a unidade" },
+    ];
+
+    resetProductForm();
+    const form = $("#product-form");
+    fields.forEach((field, index) => {
+      const select = form.elements.namedItem(field.name);
+      const selected = product?.[field.name] ?? "";
+      select.replaceChildren(new Option(field.prompt, ""));
+      catalogs[index]
+        .filter((entry) => entry.ativo || entry[field.key] === selected)
+        .forEach((entry) => select.add(new Option(entry[field.key], entry[field.key])));
+      select.value = selected;
+    });
+
+    if (product) {
+      editingProductId = product.id_produto;
+      for (const key of ["nome", "descricao", "preco"])
+        form.elements.namedItem(key).value = product[key] ?? "";
+      form.elements.namedItem("ativo").checked = product.ativo;
+      $("#product-submit-label").textContent = "Salvar alterações";
+      $("#product-form-title").textContent = "Editar produto";
+    }
+    $("#product-feedback").classList.add("hidden");
+    $("#product-modal").showModal();
+    form.elements.namedItem("nome").focus();
+  } catch (error) {
+    showFeedback($("#product-feedback"), `Não foi possível carregar os catálogos: ${error.message}`, "error");
+  }
+}
+
+const catalogFields = {
+  categorias: { key: "nome" },
+  marcas: { key: "nome" },
+  fornecedores: { key: "nome", extra: "contato" },
+  unidades: { key: "sigla", extra: "descricao" },
+};
+
+function resetCatalogForm() {
+  editingCatalogKey = null;
+  $("#catalog-form").reset();
+  $("#catalog-submit").textContent = "Cadastrar";
+  $("#cancel-catalog-edit").classList.add("hidden");
+}
+
+async function loadCatalog() {
+  const kind = $("#catalog-kind").value;
+  const fields = catalogFields[kind];
+  $("#catalog-key-label").textContent = kind === "unidades" ? "Sigla" : "Nome";
+  $("#catalog-extra-field").classList.toggle("hidden", !fields.extra);
+  $("#catalog-extra-label").textContent = fields.extra === "contato" ? "Contato" : "Descrição";
+  catalogRows = await api(`/api/catalogos/${kind}`);
+  $("#catalog-list").innerHTML = table(catalogRows, [
+    { key: fields.key, label: kind === "unidades" ? "Sigla" : "Nome" },
+    ...(fields.extra ? [{ key: fields.extra, label: fields.extra === "contato" ? "Contato" : "Descrição" }] : []),
+    { label: "Ativo", render: (row) => row.ativo ? "Sim" : "Não" },
+    { label: "Ações", render: (row) => `<div class="flex gap-3"><button data-edit-catalog="${encodeURIComponent(row[fields.key])}" class="text-cyan-300">Editar</button><button data-delete-catalog="${encodeURIComponent(row[fields.key])}" class="text-rose-300">Excluir</button></div>` },
+  ]);
+}
+
+async function loadCustomers() {
+  const [customers, runs] = await Promise.all([
+    api("/api/integracao-clientes/clientes"),
+    api("/api/integracao-clientes"),
+  ]);
+  $("#customers-list").innerHTML = table(customers, [
+    { key: "id_cliente_origem", label: "ID no Grupo 1" },
+    { key: "nome", label: "Nome" },
+    { key: "email", label: "E-mail" },
+    { key: "cidade", label: "Cidade" },
+    { label: "Ativo", render: (row) => row.ativo ? "Sim" : "Não" },
+  ]);
+  $("#customer-runs").innerHTML = table(runs, [
+    { key: "id", label: "Execução" },
+    { label: "Início", render: (row) => new Date(row.inicio).toLocaleString("pt-BR") },
+    { key: "total_consultado", label: "Consultados" },
+    { key: "processados", label: "Processados" },
+    { key: "inseridos", label: "Inseridos" },
+    { key: "atualizados", label: "Atualizados" },
+    { key: "inalterados", label: "Inalterados" },
+    { key: "desativados", label: "Desativados" },
+    { key: "rejeitados", label: "Rejeitados" },
+    { key: "status", label: "Status" },
+    { label: "Relatório", render: (row) => `<button data-customer-run="${row.id}" class="text-cyan-300">Ver detalhes</button>` },
+  ]);
 }
 
 function dateToComparable(value) {
@@ -177,7 +286,7 @@ async function openReportModal(importId) {
 }
 
 function openSaleModal(id) {
-  const sale = sales.find((item) => item.id_venda === Number(id));
+  const sale = sales.find((item) => Number(item.id_venda) === Number(id));
   if (!sale) return;
   $("#sale-title").textContent = `Venda #${sale.id_venda}`;
   const labels = {
@@ -216,9 +325,10 @@ document.querySelectorAll(".tab").forEach((button) =>
     requestAnimationFrame(() => panel.classList.add("panel-enter"));
     button.classList.add("tab--active");
     button.setAttribute("aria-current", "page");
-    if (button.dataset.tab === "products")
-      await Promise.all([loadProducts(), loadNextProductId()]);
+    if (button.dataset.tab === "products") await loadProducts();
+    if (button.dataset.tab === "catalogs") await loadCatalog();
     if (button.dataset.tab === "sales") await loadSales();
+    if (button.dataset.tab === "customers") await loadCustomers();
   }),
 );
 
@@ -251,7 +361,7 @@ $("#import-form").addEventListener("submit", async (event) => {
       result.status === "REJEITADA_ESTRUTURA"
         ? result.structuralError
         : result.status === "REPROCESSAMENTO"
-          ? `O conteúdo deste arquivo já foi processado na remessa #${result.previousImport.id}, em ${new Date(result.previousImport.receivedAt + "Z").toLocaleString("pt-BR")}. Nenhum dado será salvo automaticamente.`
+          ? `O conteúdo deste arquivo já foi processado na remessa #${result.previousImport.id}, em ${new Date(result.previousImport.receivedAt).toLocaleString("pt-BR")}. Nenhum dado será salvo automaticamente.`
           : `Cabeçalho e ordem das 11 colunas conferidos. ${result.total} registros lidos: ${result.processed} prontos para salvar e ${result.rejected} rejeitados.`;
     $("#preview-errors").innerHTML = isStructuralError
       ? '<div class="rounded-lg border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">O arquivo não foi importado e nenhum registro será salvo. Corrija o cabeçalho ou a estrutura do CSV antes de enviar novamente.</div>'
@@ -283,25 +393,148 @@ $("#import-form").addEventListener("submit", async (event) => {
   }
 });
 
+$("#open-product-modal").addEventListener("click", () => openProductModal());
+$("#close-product-modal").addEventListener("click", () => $("#product-modal").close());
+$("#cancel-product-edit").addEventListener("click", () => $("#product-modal").close());
+$("#product-modal").addEventListener("close", resetProductForm);
+$("#product-modal").addEventListener("click", (event) => {
+  if (event.target === $("#product-modal")) $("#product-modal").close();
+});
+
 $("#product-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const feedback = $("#product-feedback");
   const productForm = event.currentTarget;
   const form = new FormData(productForm);
   try {
-    await api("/api/produtos", {
-      method: "POST",
+    await api(editingProductId ? `/api/produtos/${editingProductId}` : "/api/produtos", {
+      method: editingProductId ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...Object.fromEntries(form),
         ativo: form.get("ativo") === "on",
       }),
     });
-    showFeedback(feedback, "Produto cadastrado com sucesso.");
-    productForm.reset();
-    await Promise.all([loadProducts(), loadNextProductId()]);
+    const message = editingProductId ? "Produto atualizado com sucesso." : "Produto cadastrado com sucesso.";
+    $("#product-modal").close();
+    showFeedback($("#product-feedback"), message);
+    await loadProducts();
   } catch (error) {
-    showFeedback(feedback, error.message, "error");
+    showFeedback($("#product-modal").open ? $("#product-modal-feedback") : $("#product-feedback"), error.message, "error");
+  }
+});
+
+$("#products-list").addEventListener("click", async (event) => {
+  const edit = event.target.closest("[data-edit-product]");
+  const deactivate = event.target.closest("[data-deactivate-product]");
+  if (edit) {
+    const product = products.find((item) => item.id_produto === Number(edit.dataset.editProduct));
+    if (!product) return;
+    await openProductModal(product);
+  }
+  if (deactivate) {
+    try {
+      await api(`/api/produtos/${deactivate.dataset.deactivateProduct}`, { method: "DELETE" });
+      showFeedback($("#product-feedback"), "Produto desativado. O Grupo 5 poderá perceber essa alteração.");
+      await loadProducts();
+    } catch (error) {
+      showFeedback($("#product-feedback"), error.message, "error");
+    }
+  }
+});
+
+$("#catalog-kind").addEventListener("change", async () => {
+  resetCatalogForm();
+  await loadCatalog();
+});
+$("#cancel-catalog-edit").addEventListener("click", resetCatalogForm);
+$("#catalog-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const kind = $("#catalog-kind").value;
+  const fields = catalogFields[kind];
+  const form = event.currentTarget;
+  const body = {
+    [fields.key]: form.elements.namedItem("key").value,
+    ativo: form.elements.namedItem("ativo").checked,
+  };
+  if (fields.extra) body[fields.extra] = form.elements.namedItem("extra").value;
+  try {
+    await api(editingCatalogKey ? `/api/catalogos/${kind}/${encodeURIComponent(editingCatalogKey)}` : `/api/catalogos/${kind}`, {
+      method: editingCatalogKey ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    showFeedback($("#catalog-feedback"), editingCatalogKey ? "Registro atualizado." : "Registro cadastrado.");
+    resetCatalogForm();
+    await loadCatalog();
+    if (kind === "categorias" || kind === "unidades") await loadProducts();
+  } catch (error) {
+    showFeedback($("#catalog-feedback"), error.message, "error");
+  }
+});
+$("#catalog-list").addEventListener("click", async (event) => {
+  const kind = $("#catalog-kind").value;
+  const fields = catalogFields[kind];
+  const edit = event.target.closest("[data-edit-catalog]");
+  const remove = event.target.closest("[data-delete-catalog]");
+  if (edit) {
+    const key = decodeURIComponent(edit.dataset.editCatalog);
+    const row = catalogRows.find((item) => item[fields.key] === key);
+    if (!row) return;
+    editingCatalogKey = key;
+    $("#catalog-form").elements.namedItem("key").value = key;
+    $("#catalog-form").elements.namedItem("extra").value = fields.extra ? row[fields.extra] ?? "" : "";
+    $("#catalog-form").elements.namedItem("ativo").checked = row.ativo;
+    $("#catalog-submit").textContent = "Salvar alterações";
+    $("#cancel-catalog-edit").classList.remove("hidden");
+    $("#catalog-form").scrollIntoView({ behavior: "smooth" });
+  }
+  if (remove) {
+    try {
+      await api(`/api/catalogos/${kind}/${remove.dataset.deleteCatalog}`, { method: "DELETE" });
+      showFeedback($("#catalog-feedback"), "Registro excluído.");
+      await loadCatalog();
+    } catch (error) {
+      showFeedback($("#catalog-feedback"), error.message, "error");
+    }
+  }
+});
+
+$("#run-customer-integration").addEventListener("click", async () => {
+  const button = $("#run-customer-integration");
+  button.disabled = true;
+  button.textContent = "Integrando...";
+  try {
+    const report = await api("/api/integracao-clientes/executar", { method: "POST" });
+    showFeedback($("#customer-feedback"),
+      `Execução #${report.id}: ${report.total_consultado} consultados, ${report.processados} processados, ${report.inseridos} inseridos, ${report.atualizados} atualizados, ${report.inalterados} inalterados, ${report.desativados} desativados e ${report.rejeitados} rejeitados.`);
+    await loadCustomers();
+  } catch (error) {
+    showFeedback($("#customer-feedback"), error.message, "error");
+    await loadCustomers();
+  } finally {
+    button.disabled = false;
+    button.textContent = "Integrar clientes agora";
+  }
+});
+
+$("#customer-runs").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-customer-run]");
+  if (!button) return;
+  try {
+    const report = await api(`/api/integracao-clientes/${button.dataset.customerRun}`);
+    $("#report-title").textContent = `Integração de clientes #${report.id}`;
+    $("#report-content").innerHTML =
+      `<p class="mb-3">Status: ${escapeHtml(report.status)}</p>` +
+      `<p>Consultados: ${report.total_consultado} · Processados: ${report.processados} · Inseridos: ${report.inseridos} · Atualizados: ${report.atualizados} · Inalterados: ${report.inalterados} · Desativados: ${report.desativados} · Rejeitados: ${report.rejeitados}</p>` +
+      (report.erro_estrutural ? `<p class="mt-3 text-rose-300">${escapeHtml(report.erro_estrutural)}</p>` : "") +
+      `<div class="mt-5">${table(report.errors, [
+        { key: "registro_origem", label: "Registro" },
+        { key: "tipo_erro", label: "Tipo" },
+        { key: "descricao", label: "Descrição" },
+      ])}</div>`;
+    $("#report-modal").showModal();
+  } catch (error) {
+    showFeedback($("#customer-feedback"), error.message, "error");
   }
 });
 
@@ -389,3 +622,4 @@ $("#sales-list").addEventListener("click", (event) => {
   if (saleButton) openSaleModal(saleButton.dataset.sale);
 });
 loadImports();
+resetProductForm();

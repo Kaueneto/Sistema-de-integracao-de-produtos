@@ -14,7 +14,8 @@
         color: #cbd5e1;
       }
       .field input,
-      .field textarea {
+      .field textarea,
+      .field select {
         width: 100%;
         border-radius: 0.5rem;
         border: 1px solid #334155;
@@ -25,9 +26,24 @@
         outline: none;
       }
       .field input:focus,
-      .field textarea:focus {
+      .field textarea:focus,
+      .field select:focus {
         border-color: #22d3ee;
         box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.15);
+      }
+      #product-modal {
+        max-height: calc(100dvh - 1rem);
+        overflow-y: auto;
+        scrollbar-width: none;
+      }
+      #product-modal::-webkit-scrollbar { display: none; }
+      body:has(#product-modal[open]) { overflow: hidden; }
+      #product-form .field { gap: 0.25rem; }
+      #product-form .field input,
+      #product-form .field textarea,
+      #product-form .field select {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.875rem;
       }
       .tab-switcher {
         display: inline-flex;
@@ -96,11 +112,11 @@
           <p
             class="mb-2 text-sm font-semibold uppercase tracking-[.24em] text-cyan-400"
           >
-            Integração CSV · Grupo 3
+            Produtos e integração por banco · Grupo 3
           </p>
           <h1 class="text-3xl font-bold tracking-tight">Sistema de Produtos</h1>
           <p class="mt-2 text-slate-400">
-            Cadastro, exportação e validação de remessas do Sistema de Vendas.
+            Cadastro de produtos, integração de clientes do Grupo 1 e histórico de remessas CSV.
           </p>
         </div>
       </header>
@@ -111,6 +127,8 @@
         </button>
         <button data-tab="sales" class="tab">Vendas</button>
         <button data-tab="products" class="tab">Produtos</button>
+        <button data-tab="catalogs" class="tab">Catálogos</button>
+        <button data-tab="customers" class="tab">Clientes integrados</button>
       </nav>
 
       <section id="import" class="panel grid gap-6">
@@ -157,83 +175,70 @@
         </div>
       </section>
 
-      <section
-        id="products"
-        class="panel hidden grid gap-6 lg:grid-cols-[.8fr_1.2fr]"
-      >
-        <form
-          id="product-form"
-          class="rounded-xl border border-slate-800 bg-slate-900 p-6"
-        >
-          <h2 class="text-xl font-semibold">Cadastrar produto</h2>
-          <div class="mt-5 grid gap-4">
-            <label class="field"
-              >ID do produto
-              <input
-                name="id_produto"
-                type="text"
-                readonly
-                aria-describedby="product-id-help" />
-                </label>
-              <p id="product-id-help" class="-mt-2 text-xs text-slate-400">
-              Gerado automaticamente a partir dos produtos já cadastrados.
-            </p>
-            <label class="field">Nome
-              <input name="nome" required maxlength="120" />
-              </label>
-            <label class="field">Descrição<textarea
-                name="descricao"
-                rows="3"
-                maxlength="500"
-              ></textarea></label>
-          <label class="field"
-              >Categoria<input
-                name="categoria"
-                required
-                maxlength="100" /></label
-            ><label class="field"
-              >Preço<input
-                name="preco"
-                type="text"
-                inputmode="decimal"
-                required /></label
-            ><p class="-mt-2 text-xs text-slate-400">
-              Informe um valor maior que zero. Use vírgula ou ponto para os centavos, por exemplo: 19,90.
-            </p>
-            <label class="field"
-              >Unidade de medida<input
-                name="unidade_medida"
-                required
-                maxlength="20"
-                placeholder="UN, KG, L..." /></label
-            ><label class="flex items-center gap-2 text-sm"
-              ><input name="ativo" type="checkbox" checked /> Produto
-              ativo</label
-            ><button
-              class="rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950"
-            >
-              Cadastrar produto
-            </button>
-          </div>
-          <p
-            id="product-feedback"
-            class="mt-4 hidden rounded-lg px-4 py-3 text-sm"
-          ></p>
-        </form>
+      <section id="customers" class="panel hidden grid gap-6">
+        <div class="rounded-xl border border-slate-800 bg-slate-900 p-6">
+          <h2 class="text-xl font-semibold">Integração de clientes do Grupo 1</h2>
+          <p class="mt-2 text-sm text-slate-400">Consulta a view do banco do Grupo 1, valida os registros e grava uma cópia no banco do Grupo 3.</p>
+          <button id="run-customer-integration" class="mt-5 rounded-lg bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 hover:bg-cyan-400">Integrar clientes agora</button>
+          <p id="customer-feedback" class="mt-4 hidden rounded-lg px-4 py-3 text-sm"></p>
+        </div>
         <div>
-          <div class="mb-3 flex items-center justify-between">
+          <h2 class="mb-3 text-xl font-semibold">Clientes gravados no nosso banco</h2>
+          <div id="customers-list" class="overflow-x-auto rounded-xl border border-slate-800"></div>
+        </div>
+        <div>
+          <h2 class="mb-3 text-xl font-semibold">Execuções da integração</h2>
+          <div id="customer-runs" class="overflow-x-auto rounded-xl border border-slate-800"></div>
+        </div>
+      </section>
+
+      <section id="catalogs" class="panel hidden grid gap-6">
+        <div class="rounded-xl border border-slate-800 bg-slate-900 p-6">
+          <h2 class="text-xl font-semibold">Catálogos de produtos</h2>
+          <p class="mt-2 text-sm text-slate-400">Gerencie categorias, marcas, fornecedores e unidades de medida. Registros usados por produtos não podem ser excluídos.</p>
+          <label class="field mt-5">Tipo de catálogo
+            <select id="catalog-kind" class="rounded-lg border border-slate-700 bg-slate-950 p-2 text-slate-100">
+              <option value="categorias">Categorias</option>
+              <option value="marcas">Marcas</option>
+              <option value="fornecedores">Fornecedores</option>
+              <option value="unidades">Unidades de medida</option>
+            </select>
+          </label>
+          <form id="catalog-form" class="mt-5 grid gap-3 sm:grid-cols-3">
+            <label class="field"><span id="catalog-key-label">Nome</span><input name="key" required /></label>
+            <label id="catalog-extra-field" class="field hidden"><span id="catalog-extra-label">Descrição ou contato</span><input name="extra" /></label>
+            <label class="flex items-center gap-2 text-sm"><input name="ativo" type="checkbox" checked /> Ativo</label>
+            <div class="flex gap-3 sm:col-span-3">
+              <button id="catalog-submit" class="rounded-lg bg-cyan-500 px-5 py-2 font-semibold text-slate-950">Cadastrar</button>
+              <button id="cancel-catalog-edit" type="button" class="hidden rounded-lg border border-slate-700 px-4 py-2">Cancelar edição</button>
+            </div>
+          </form>
+          <p id="catalog-feedback" class="mt-4 hidden rounded-lg px-4 py-3 text-sm"></p>
+        </div>
+        <div id="catalog-list" class="overflow-x-auto rounded-xl border border-slate-800"></div>
+      </section>
+
+      <section id="products" class="panel hidden">
+        <div class="mb-5 flex flex-wrap items-center justify-between gap-4">
+          <div>
             <h2 class="text-xl font-semibold">Produtos cadastrados</h2>
+            <p class="mt-1 text-sm text-slate-400">Cadastre, edite e desative os produtos disponibilizados ao Grupo 5.</p>
+          </div>
+          <div class="flex flex-wrap gap-3">
             <a
               href="/api/produtos/export/csv"
-              class="rounded-lg border border-cyan-500/50 px-3 py-2 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/10"
+              class="rounded-lg border border-cyan-500/50 px-4 py-2.5 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/10"
               >Exportar CSV</a
             >
+            <button
+              id="open-product-modal"
+              type="button"
+              class="rounded-lg bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+            >+ Cadastrar produto</button>
           </div>
-          <div
-            id="products-list"
-            class="overflow-x-auto rounded-xl border border-slate-800"
-          ></div>
         </div>
+        <p id="product-feedback" class="mb-4 hidden rounded-lg px-4 py-3 text-sm" role="status"></p>
+        <div id="products-list" class="overflow-x-auto rounded-xl border border-slate-800"></div>
       </section>
 
       <section id="sales" class="panel hidden">
@@ -277,6 +282,57 @@
         ></div>
       </section>
     </main>
+    <dialog
+      id="product-modal"
+      aria-labelledby="product-form-title"
+      class="w-[calc(100%-2rem)] max-w-4xl rounded-2xl border border-slate-700 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/80"
+    >
+      <form id="product-form" class="p-4 sm:p-5">
+        <div class="mb-3 flex items-start justify-between gap-4 border-b border-slate-800 pb-3">
+          <div>
+            <h2 id="product-form-title" class="mt-1 text-xl font-semibold">Cadastrar produto</h2>
+          </div>
+          <button id="close-product-modal" type="button" class="rounded-lg px-2 py-1 text-slate-300 hover:bg-slate-800" aria-label="Fechar formulário de produto">✕</button>
+        </div>
+
+        <div class="grid gap-3 min-[480px]:grid-cols-2 lg:grid-cols-3">
+          <label class="field lg:col-span-2">Nome do produto
+            <input name="nome" required maxlength="120" />
+          </label>
+          <label class="field">Categoria
+            <select name="categoria" required></select>
+          </label>
+          <label class="field min-[480px]:col-span-2">Descrição
+            <textarea name="descricao" rows="2" maxlength="500"></textarea>
+          </label>
+          <label class="field">Preço
+            <input name="preco" type="text" inputmode="decimal" required placeholder="Ex.: 19,90" aria-describedby="product-price-help" />
+            <span id="product-price-help" class="text-xs font-normal text-slate-400">Maior que zero; use vírgula ou ponto.</span>
+          </label>
+          <label class="field">Marca (opcional)
+            <select name="marca"></select>
+          </label>
+          <label class="field">Fornecedor (opcional)
+            <select name="fornecedor"></select>
+          </label>
+          <label class="field">Unidade de medida
+            <select name="unidade_medida" required></select>
+          </label>
+          <label class="flex items-center gap-2 text-sm font-medium text-slate-200 min-[480px]:col-span-2 lg:col-span-3">
+            <input name="ativo" type="checkbox" checked class="h-4 w-4 accent-cyan-500" /> Produto ativo
+          </label>
+        </div>
+
+        <p class="mt-3 text-xs text-slate-400">Precisa de outra opção? Cadastre-a na aba Catálogos.</p>
+        <p id="product-modal-feedback" class="mt-3 hidden rounded-lg px-3 py-2 text-sm" role="alert"></p>
+        <div class="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-800 pt-3">
+          <button id="cancel-product-edit" type="button" class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800">Cancelar</button>
+          <button type="submit" class="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400">
+            <span id="product-submit-label">Cadastrar produto</span>
+          </button>
+        </div>
+      </form>
+    </dialog>
     <dialog
       id="errors-modal"
       class="w-[min(100%-2rem,72rem)] rounded-2xl border border-slate-700 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-slate-950/80"

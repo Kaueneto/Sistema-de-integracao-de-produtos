@@ -1,5 +1,6 @@
 node_modules/
 .env
+tmp/
 examples/
 data/rejections/
 data/*.db

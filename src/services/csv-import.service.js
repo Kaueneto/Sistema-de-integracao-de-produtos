@@ -3,25 +3,9 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { TextDecoder } from "node:util";
 import { parse } from "csv-parse/sync";
-import { db } from "../db/database.js";
+import { db, withTransaction } from "../db/database.js";
 import { VENDAS_CONTRACT } from "../config/vendas-contract.js";
 import { validateVenda } from "./venda-validation.service.js";
-
-const findImportByHash = db.prepare(
-  "SELECT id, recebido_em, status FROM importacoes WHERE hash_arquivo = ?",
-);
-const insertImport = db.prepare(
-  "INSERT INTO importacoes (nome_arquivo, status, hash_arquivo) VALUES (?, ?, ?)",
-);
-const insertSale = db.prepare(
-  `INSERT INTO vendas (importacao_id, id_venda, id_cliente, id_produto, quantidade, valor_unitario, valor_total, data_venda, forma_pagamento, status, integrante, email) VALUES (@importacao_id, @id_venda, @id_cliente, @id_produto, @quantidade, @valor_unitario, @valor_total, @data_venda, @forma_pagamento, @status, @integrante, @email)`,
-);
-const insertError = db.prepare(
-  "INSERT INTO erros_importacao (importacao_id, linha, motivo, dados) VALUES (?, ?, ?, ?)",
-);
-const completeImport = db.prepare(
-  "UPDATE importacoes SET total_registros = ?, processados = ?, rejeitados = ?, status = ? WHERE id = ?",
-);
 
 const pendingImports = new Map();
 
@@ -85,9 +69,11 @@ function writeRejections(importId, errors) {
   );
 }
 
-export function previewVendasCsv(file) {
+export async function previewVendasCsv(file) {
   const hash = createHash("sha256").update(file.buffer).digest("hex");
-  const previousImport = findImportByHash.get(hash);
+  const previousImport = (await db.query(
+    "SELECT id, recebido_em, status FROM importacoes WHERE hash_arquivo = $1", [hash],
+  )).rows[0];
   if (previousImport) {
     return createPreview({
       status: "REPROCESSAMENTO",
@@ -167,7 +153,7 @@ export function previewVendasCsv(file) {
   });
 }
 
-export function confirmVendasImport(token) {
+export async function confirmVendasImport(token) {
   const preview = pendingImports.get(token);
   if (!preview)
     throw new Error("A prévia expirou. Selecione o arquivo novamente.");
@@ -177,26 +163,32 @@ export function confirmVendasImport(token) {
   const errors = [...preview.errors];
   let processed = 0;
   let importId;
-  db.transaction(() => {
-    importId = insertImport.run(
-      preview.fileName,
-      "CONCLUIDA",
-      preview.hash,
-    ).lastInsertRowid;
+  await withTransaction(async (client) => {
+    importId = (await client.query(
+      "INSERT INTO importacoes (nome_arquivo, status, hash_arquivo) VALUES ($1, $2, $3) RETURNING id",
+      [preview.fileName, "CONCLUIDA", preview.hash],
+    )).rows[0].id;
     for (const record of preview.validRecords) {
-      insertSale.run({ importacao_id: importId, ...record });
+      await client.query(
+        `INSERT INTO vendas (importacao_id, id_venda, id_cliente, id_produto, quantidade,
+          valor_unitario, valor_total, data_venda, forma_pagamento, status, integrante, email)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [importId, record.id_venda, record.id_cliente, record.id_produto, record.quantidade,
+          record.valor_unitario, record.valor_total, record.data_venda, record.forma_pagamento,
+          record.status, record.integrante, record.email],
+      );
       processed += 1;
     }
     for (const error of preview.errors)
-      insertError.run(importId, error.line, error.reason, error.raw);
-    completeImport.run(
-      preview.total,
-      processed,
-      errors.length,
-      "CONCLUIDA",
-      importId,
+      await client.query(
+        "INSERT INTO erros_importacao (importacao_id, linha, motivo, dados) VALUES ($1,$2,$3,$4)",
+        [importId, error.line, error.reason, error.raw],
+      );
+    await client.query(
+      "UPDATE importacoes SET total_registros=$1, processados=$2, rejeitados=$3 WHERE id=$4",
+      [preview.total, processed, errors.length, importId],
     );
-  })();
+  });
   pendingImports.delete(token);
   writeRejections(importId, errors);
   return {
