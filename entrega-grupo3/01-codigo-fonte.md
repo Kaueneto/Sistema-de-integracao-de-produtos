@@ -1,6 +1,6 @@
 # 1. Código-fonte
 
-Repositório configurado como `origin`: https://github.com/Kaueneto/Sistema-de-integra-o---produtos
+Repositório configurado como `origin`: https://github.com/Kaueneto/Sistema-de-integracao-de-produtos
 
 O repositório deve conter `src/`, `public/`, `sql/`, `scripts/`, `test/`, `package.json`, `package-lock.json`, `.env.example` e `README.md`. O código inclui tanto o lado consumidor (Grupo 1 → Grupo 3) quanto o lado produtor (Grupo 3 → Grupo 5).
 
