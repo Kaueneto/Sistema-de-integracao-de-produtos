@@ -1,0 +1,20 @@
+# Copiar os valores necessários para o .env da raiz do projeto.
+PGHOST=127.0.0.1
+PGPORT=5432
+PGDATABASE=grupo3_db
+PGUSER=grupo3_app
+PGPASSWORD=PREENCHER_LOCALMENTE
+
+# Com o cliente Cloudflare TCP do Grupo 1 ativo no mesmo computador:
+GRUPO1_PGHOST=127.0.0.1
+GRUPO1_PGPORT=15437
+GRUPO1_PGDATABASE=grupo1_db
+GRUPO1_PGUSER=integ_g3
+GRUPO1_PGPASSWORD=PREENCHER_LOCALMENTE
+GRUPO1_VIEW=integracao.vw_integracao_clientes
+GRUPO1_FIELD_ID=codigo_cliente
+GRUPO1_FIELD_NAME=nome_cliente
+GRUPO1_FIELD_EMAIL=email_cliente
+GRUPO1_FIELD_CITY=cidade
+GRUPO1_FIELD_ACTIVE=ativo
+GRUPO1_FIELD_UPDATED=data_atualizacao
